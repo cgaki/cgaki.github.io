@@ -89,7 +89,7 @@ float colortransformation(float x, s_mean, s_sd, t_mean, t_sd)
 ```
 
 計算した平均と標準偏差を使用し、COP /Filter Vop /Inline VopないでColor Transformationを実装する。
-![colortransformation01-kk49jkpr.png](/boostnote/attachments/colortransformation01-kk49jkpr.png)
+![colortransformation01-kk49jkpr.png](../boostnote/attachments/colortransformation01-kk49jkpr.png)
 ```cpp
 // COP/Filter Vop/Inline Vop
 # include <colortransformation.vfl>
