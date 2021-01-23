@@ -3,17 +3,27 @@ title: Base Color Transformation
 tags: []
 ---
 
+# Base Color Transformation
+![](bct03-kk7g8odc.png)
 Megascansのライブラリには様々な地域でスキャンされたデータが存在します。それらを組み合わせて配置する際に、ベースカラーの色味を合わせて、ルックに統一性をもたせます。具体的には、古典的な画像の色変換の論文[Color Transfer between Images](https://www.cs.tau.ac.il/%7Eturkel/imagepapers/ColorTransfer.pdf)を用いて、スキャンされたアルベドテクスチャの色味を加工します。OpenCVやPyTorchなどのライブラリを使用した実装を参考に、HQueue上で管理しやすいようにすべてVEXで実装しました。
 
-sRGB→Labへの変換は特殊な行列演算を行うことでできるらですが、要調査
+**sRGB→Labへの変換は特殊な行列演算を行うことでできるらですが、要調査**
 
-## アルゴリズムについて
+## 注意
+このアルゴリズムは多くの場合デティールを保持したまま色味を変えることができるが、例えば「青色の花」を「赤色の花」に変換するためには向いてない。あくまで元画像の色を指定画像の色に寄せるだけ、元画像の「青」を指定画像の「赤」に変換することは難しい。
+また、ベースカラー等の陰影が除去された画像を陰影がついた画像に変換する場合は、コントラストが高くなってしまう場合がある。
+![](../boostnote/attachments/bct04-kk81eonn.png)
+![](../boostnote/attachments/bct05-kk81f1rs.png)
+
+
+## Houdiniにおける実装
+### アルゴリズムについて
 
 色を変更したい画像をA、色を抽出したい画像をBとすると、
 
 以下の計算を各ピクセルごとに行う。
 
-Input(sRGB) → Linear化 → xyz色空間に変換 → lab色空間に変換 → labの平均と標準偏差を計算 → 式Aを適用 → xyz色空間に変換 → rgb色空間に変換
+Input(sRGB) → Linear化 → xyz表示系に変換 → Lab表示系に変換 → Lab各値の平均と標準偏差を計算 → 式Aを適用 → xyz表示系に変換 → RGB表示系に変換
 
 この内新しくHoudini内で実装しなければいけないのは
 
@@ -21,14 +31,11 @@ Input(sRGB) → Linear化 → xyz色空間に変換 → lab色空間に変換 �
 - 平均と標準偏差の計算
 - color transformation
 - lab to xyz
-
-## Houdiniにおける実装
-
-まず、再利用できそうな関数をヘッダファイルとして書きました。
+- 
+[Wikipedia](https://en.wikipedia.org/wiki/CIELAB_color_space#CIELAB-CIEXYZ_conversions)の3項の式を参考にVEXで実装する。
 
 ```cpp
-// /vex/include/color.vfl
-
+/// colortransformation.vfl
 // XYZ -> Lab への変換
 float forwardtransformation(float t)
 {
@@ -53,6 +60,7 @@ vector xyz2lab(vector xyz)
     return set(l, a, b);
 }
 
+// Lab -> XYZ への変換
 float reversetransformation(float t)
 {
     float delta = 6.0 / 29.0;
@@ -60,7 +68,6 @@ float reversetransformation(float t)
     return rt;
 }
 
-// Lab -> XYZ への変換
 vector lab2xyz(vector lab)
 {
     float xn = 95.0489 / 100;
@@ -87,9 +94,10 @@ float colortransformation(float x, s_mean, s_sd, t_mean, t_sd)
     return x;
 }
 ```
+### 平均と標準偏差の計算
+COP内でループを回すと重そうなので、SOPで各ピクセルをポイントに、色をpointアトリビュートに変換して`Attribute Promote SOP`を使用し、平均と標準偏差を求める。各平均と標準偏差はCOPから参照できるようにdetailアトリビュートに保存する。
+計算した平均と標準偏差をCOPで参照し、Inline VOPで作成した関数を使用する。
 
-計算した平均と標準偏差を使用し、COP /Filter Vop /Inline VopないでColor Transformationを実装する。
-![colortransformation01-kk49jkpr.png](../boostnote/attachments/colortransformation01-kk49jkpr.png)
 ```cpp
 // COP/Filter Vop/Inline Vop
 # include <colortransformation.vfl>
@@ -105,7 +113,12 @@ vector newcolor = xyztorgb(lab2xyz(set(newl, newa, newb)));
 $outR = newcolor.r;
 $outG = newcolor.g;
 $outB = newcolor.b;
+
 ```
+![](../boostnote/attachments/bct01-kk50ysch.png)
+![](../boostnote/attachments/bct02-kk615h3w.png)
+
+
 
 ## 参考
 
